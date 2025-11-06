@@ -1,17 +1,15 @@
-// bigmul_baseline.c  — Part 1: arbitrary-precision multiply (no SIMD, no libs)
-
 #define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 
-#define BASE 1000000000u  // limb base = 10^9, fits in uint32_t
+#define BASE 1000000000u
 
 typedef struct {
     uint32_t *v;   // little-endian limbs (v[0] is least significant)
-    size_t n;      // used limbs
-    size_t cap;    // allocated limbs
+    size_t n;
+    size_t cap;
 } bigint;
 
 static void die(const char *m){ fprintf(stderr,"%s\n",m); exit(1); }
@@ -34,7 +32,6 @@ static void bi_trim(bigint *x){
 }
 static void bi_free(bigint *x){ free(x->v); x->v=NULL; x->n=x->cap=0; }
 
-// Parse decimal string s (non-negative) into base-1e9 limbs
 static void bi_from_string(bigint *x, const char *s){
     size_t len = strlen(s), i = 0;
     while (i < len && s[i]=='0') i++;           // skip leading zeros
@@ -72,7 +69,7 @@ static void bi_from_string(bigint *x, const char *s){
     bi_trim(x);
 }
 
-// Convert to decimal string (caller frees)
+// Convert to decimal string
 static char* bi_to_string(const bigint *x){
     if (x->n==0){ char *z=malloc(2); strcpy(z,"0"); return z; }
 
@@ -99,7 +96,7 @@ static char* bi_to_string(const bigint *x){
     return out;
 }
 
-// O(n*m) schoolbook multiply with 64-bit accumulation
+// simple multiply with 64-bit accumulation
 static void bi_mul(const bigint *a, const bigint *b, bigint *c){
     if (a->n==0 || b->n==0){ bi_init(c,1); return; }
     size_t n=a->n, m=b->n;

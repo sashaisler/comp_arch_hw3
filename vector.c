@@ -1,7 +1,3 @@
-// bigmul_neon.c — Part 2: vectorized big-int multiply (ARM NEON)
-// Representation: base = 1e9 in uint32_t limbs (little-endian).
-// Build: clang -O3 -std=c11 -march=armv8-a+simd -DUSE_NEON bigmul_neon.c -o bigmul_neon
-
 #define _POSIX_C_SOURCE 200809L
 #include <stdint.h>
 #include <stdio.h>
@@ -12,8 +8,8 @@
 
 typedef struct {
     uint32_t *v;   // limbs (v[0] is least-significant)
-    size_t n;      // used
-    size_t cap;    // capacity
+    size_t n;
+    size_t cap;
 } bigint;
 
 static void die(const char *m){ fprintf(stderr, "%s\n", m); exit(1); }
@@ -36,7 +32,6 @@ static void bi_trim(bigint *x){
 }
 static void bi_free(bigint *x){ free(x->v); x->v=NULL; x->n=x->cap=0; }
 
-// --- Parse decimal -> base-1e9 limbs
 static void bi_from_string(bigint *x, const char *s){
     size_t len = strlen(s), i = 0;
     while (i < len && s[i]=='0') i++;
@@ -74,7 +69,6 @@ static void bi_from_string(bigint *x, const char *s){
     bi_trim(x);
 }
 
-// --- Convert base-1e9 limbs -> decimal string
 static char* bi_to_string(const bigint *x){
     if (x->n==0){ char *z=malloc(2); strcpy(z,"0"); return z; }
 
@@ -106,7 +100,6 @@ static char* bi_to_string(const bigint *x){
     return out;
 }
 
-// --- Baseline schoolbook
 static void bi_mul_baseline(const bigint *a, const bigint *b, bigint *c){
     if (a->n==0 || b->n==0){ bi_init(c,1); return; }
     size_t n=a->n, m=b->n;
@@ -135,12 +128,10 @@ static void bi_mul_baseline(const bigint *a, const bigint *b, bigint *c){
 #ifdef USE_NEON
 #include <arm_neon.h>
 
-// Multiply-accumulate 4 lanes of b into 64-bit S[], using scalar a_i.
 static inline void mul_add_lane4(uint32_t a_i, const uint32_t *bptr, uint64_t *S){
     // Load 4x u32 from b
     uint32x4_t vb = vld1q_u32(bptr);
 
-    // NEON vmull_u32 multiplies 2x32 -> 2x64, so do low/high halves.
     uint32x2_t va2 = vdup_n_u32(a_i);
 
     uint32x2_t vb_lo = vget_low_u32(vb);
@@ -153,7 +144,6 @@ static inline void mul_add_lane4(uint32_t a_i, const uint32_t *bptr, uint64_t *S
     uint64x2_t S01 = vld1q_u64(&S[0]); // S[0], S[1]
     uint64x2_t S23 = vld1q_u64(&S[2]); // S[2], S[3]
 
-    // Accumulate and store back
     S01 = vaddq_u64(S01, prod_lo);
     S23 = vaddq_u64(S23, prod_hi);
 
@@ -162,7 +152,6 @@ static inline void mul_add_lane4(uint32_t a_i, const uint32_t *bptr, uint64_t *S
 }
 #endif
 
-// --- Vectorized schoolbook using 64-bit accumulation buffer
 static void bi_mul_neon(const bigint *a, const bigint *b, bigint *c){
 #ifndef USE_NEON
     bi_mul_baseline(a, b, c);
@@ -188,13 +177,11 @@ static void bi_mul_neon(const bigint *a, const bigint *b, bigint *c){
         for (; j + 4 <= m; j += 4){
             mul_add_lane4(ai, &b->v[j], &S[offset + j]);
         }
-        // Tail (scalar)
         for (; j < m; j++){
             S[offset + j] += (uint64_t)ai * (uint64_t)b->v[j];
         }
     }
 
-    // Carry-propagate from S into base-1e9 limbs
     uint64_t carry = 0;
     for (size_t t=0; t<L; t++){
         uint64_t total = S[t] + carry + c->v[t];
